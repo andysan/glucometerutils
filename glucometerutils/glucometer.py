@@ -13,6 +13,11 @@ import sys
 from glucometerutils import common
 from glucometerutils import exceptions
 
+_reading_types = {
+    "glucose" : common.GlucoseReading,
+    "ketones" : common.KetoneReading,
+}
+
 def main():
     if sys.version_info < (3, 4):
         raise Exception(
@@ -49,8 +54,9 @@ def main():
         choices=[unit.value for unit in common.Unit],
         help='Select the unit to use for the dumped data.')
     parser_dump.add_argument(
-        '--with-ketone', action='store_true', default=False,
-        help='Enable ketone reading if available on the glucometer.')
+        '--type', action="append",
+        choices=list(_reading_types.keys()),
+        help='Reading types to show (can be specified multiple times)')
 
     parser_date = subparsers.add_parser(
         'datetime', help='Reads or sets the date and time of the glucometer.')
@@ -95,11 +101,13 @@ def main():
             if unit is None:
                 unit = device_info.native_unit
 
-            readings = device.get_readings()
+            if args.type:
+                reading_types = tuple((_reading_types[t] for t in args.type))
+            else:
+                reading_types = common.GlucoseReading
 
-            if not args.with_ketone:
-                readings = (reading for reading in readings
-                            if not isinstance(reading, common.KetoneReading))
+            readings = (reading for reading in device.get_readings()
+                        if isinstance(reading, reading_types))
 
             for reading in sorted(readings, key=lambda r: r.timestamp):
                 print(reading.as_csv(unit))
